@@ -1,18 +1,18 @@
 # For more details on how to configure Wrangler, refer to:
 # https://developers.cloudflare.com/workers/wrangler/configuration/
 
-name = "orp"
+name = "chatsune"
 main = "index.js"
 compatibility_date = "2025-08-24"
 
 # Durable Objects
 [[migrations]]
 tag = "v1"
-new_sqlite_classes = ["MyDurableObject"]
+new_sqlite_classes = ["ChatsuneDurableObject"]
 
 [durable_objects]
 bindings = [
-  { name = "MY_DURABLE_OBJECT", class_name = "MyDurableObject" }
+  { name = "CHATSUNE_DURABLE_OBJECT", class_name = "ChatsuneDurableObject" }
 ]
 
 [observability]
