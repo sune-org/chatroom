@@ -14,17 +14,10 @@ const withCORS = (resp) => {
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
-    const method = req.method.toUpperCase();
-    if (method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS });
-    if (url.pathname === '/ws') {
-      if (method !== 'GET' || req.headers.get('Upgrade') !== 'websocket') return withCORS(new Response('method not allowed', { status: 405 }));
-      const rawUid = url.searchParams.get('uid') || 'anon';
-      const uid = String(rawUid).slice(0, 64).replace(/[^a-zA-Z0-9_-]/g, '') || 'anon';
-      const id = env.CHATSUNE_DURABLE_OBJECT.idFromName(uid);
-      const stub = env.CHATSUNE_DURABLE_OBJECT.get(id);
-      return await stub.fetch(req);
-    }
-    return withCORS(new Response('not found', { status: 404 }));
+    if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS });
+    if (url.pathname !== '/ws') return withCORS(new Response('not found', { status: 404 }));
+    if (req.method !== 'GET' || req.headers.get('Upgrade') !== 'websocket') return withCORS(new Response('method not allowed', { status: 405 }));
+    return env.CHATSUNE_DURABLE_OBJECT.get(env.CHATSUNE_DURABLE_OBJECT.idFromName("global")).fetch(req);
   }
 };
 
@@ -38,8 +31,7 @@ export class ChatsuneDurableObject {
   async fetch(req) {
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS });
     if (req.headers.get('Upgrade') === 'websocket') {
-      const pair = new WebSocketPair();
-      const [client, server] = [pair[0], pair[1]];
+      const [client, server] = Object.values(new WebSocketPair());
       server.accept();
       this.sockets.add(server);
       server.addEventListener('close', () => this.sockets.delete(server));
