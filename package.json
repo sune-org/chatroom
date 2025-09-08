@@ -1,0 +1,17 @@
+{
+  "name": "orp",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "start": "wrangler dev"
+  },
+  "dependencies": {
+    "openai": "5.16.*"
+  },
+  "devDependencies": {
+    "wrangler": "4.33.*"
+  }
+}
