@@ -1,5 +1,5 @@
 {
-  "name": "orp",
+  "name": "chatsune",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -9,7 +9,7 @@
     "start": "wrangler dev"
   },
   "dependencies": {
-    "openai": "5.16.*"
+    
   },
   "devDependencies": {
     "wrangler": "4.33.*"
