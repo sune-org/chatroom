@@ -24,7 +24,9 @@ export default {
 export class ChatsuneDurableObject {
   constructor(state, env) {
     this.state = state;
+    this.env = env;
     this.sockets = new Set();
+    this.rateLimiter = new Map();
     this.state.blockConcurrencyWhile(async () => this.messages = await this.state.storage.get('messages') || []);
   }
 
@@ -38,6 +40,7 @@ export class ChatsuneDurableObject {
     const [client, server] = Object.values(new WebSocketPair());
     server.accept();
     this.sockets.add(server);
+    server.ip = req.headers.get('cf-connecting-ip');
 
     server.addEventListener('message', async (event) => {
       try {
@@ -52,6 +55,14 @@ export class ChatsuneDurableObject {
           }
           case 'NEW_MESSAGE': {
             if (!server.username) return;
+            const now = Date.now(), timestamps = (this.rateLimiter.get(server.ip) || []).filter(t => now - t < 10000);
+            if (timestamps.length >= 5) return server.send(JSON.stringify({ type: 'ERROR', payload: 'Rate limit exceeded.' }));
+            this.rateLimiter.set(server.ip, [...timestamps, now]);
+
+            const modRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${this.env.GOOGLE_KEY}`, { method: 'POST', body: JSON.stringify({ contents: [{ parts: [{ text: `if this message is appropiate respond only with yes, if its not respond with anything but yes. message: ${data.payload.text}` }] }] }) });
+            const modData = await modRes.json();
+            if (modData.candidates?.[0]?.content?.parts?.[0]?.text.trim().toLowerCase() !== 'yes') return server.send(JSON.stringify({ type: 'ERROR', payload: 'Message rejected by moderator.' }));
+            
             const messagePayload = { author: { name: server.username }, text: data.payload.text, timestamp: new Date().toISOString() };
             this.messages.push(messagePayload);
             this.messages = this.messages.slice(-4);
