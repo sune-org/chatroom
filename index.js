@@ -24,20 +24,51 @@ export default {
 export class ChatsuneDurableObject {
   constructor(state, env) {
     this.state = state;
-    this.env = env;
     this.sockets = new Set();
+    this.state.blockConcurrencyWhile(async () => this.messages = await this.state.storage.get('messages') || []);
   }
 
+  broadcast(message) { this.sockets.forEach(s => s.readyState === WebSocket.OPEN && s.send(JSON.stringify(message))); }
+
+  broadcastConnectionCount() { this.broadcast({ type: 'CONNECTION_COUNT', payload: { count: this.sockets.size } }); }
+
   async fetch(req) {
-    if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS });
-    if (req.headers.get('Upgrade') === 'websocket') {
-      const [client, server] = Object.values(new WebSocketPair());
-      server.accept();
-      this.sockets.add(server);
-      server.addEventListener('close', () => this.sockets.delete(server));
-      server.addEventListener('message', () => {});
-      return new Response(null, { status: 101, webSocket: client });
-    }
-    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } });
+    if (req.headers.get('Upgrade') !== 'websocket') return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } });
+    
+    const [client, server] = Object.values(new WebSocketPair());
+    server.accept();
+    this.sockets.add(server);
+
+    server.addEventListener('message', async (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        switch (data.type) {
+          case 'USER_JOINED': {
+            server.username = data.payload.name || `anon-${crypto.randomUUID().slice(0, 8)}`;
+            server.send(JSON.stringify({ type: 'HISTORY', payload: this.messages }));
+            this.broadcast({ type: 'NEW_MESSAGE', payload: { author: { name: 'system' }, text: `${server.username} has joined.`, timestamp: new Date().toISOString() } });
+            this.broadcastConnectionCount();
+            break;
+          }
+          case 'NEW_MESSAGE': {
+            if (!server.username) return;
+            const messagePayload = { author: { name: server.username }, text: data.payload.text, timestamp: new Date().toISOString() };
+            this.messages.push(messagePayload);
+            this.messages = this.messages.slice(-4);
+            this.broadcast({ type: 'NEW_MESSAGE', payload: messagePayload });
+            await this.state.storage.put('messages', this.messages);
+            break;
+          }
+        }
+      } catch (e) { /* Ignore invalid JSON */ }
+    });
+
+    server.addEventListener('close', () => {
+      this.sockets.delete(server);
+      if (server.username) this.broadcast({ type: 'NEW_MESSAGE', payload: { author: { name: 'system' }, text: `${server.username} has left.`, timestamp: new Date().toISOString() } });
+      this.broadcastConnectionCount();
+    });
+
+    return new Response(null, { status: 101, webSocket: client });
   }
 }
