@@ -59,10 +59,6 @@ export class ChatsuneDurableObject {
             if (timestamps.length >= 3) return server.send(JSON.stringify({ type: 'ERROR', payload: 'Rate limit exceeded.' }));
             this.rateLimiter.set(server.ip, [...timestamps, now]);
 
-            const modRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${this.env.GOOGLE_KEY}`, { method: 'POST', body: JSON.stringify({ contents: [{ parts: [{ text: `if this message is appropiate respond only with yes, if its not respond with anything but yes. message: ${data.payload.text}` }] }] }) });
-            const modData = await modRes.json();
-            if (modData.candidates?.[0]?.content?.parts?.[0]?.text.trim().toLowerCase() !== 'yes') return server.send(JSON.stringify({ type: 'ERROR', payload: 'Message rejected by moderator.' }));
-            
             const messagePayload = { author: { name: server.username }, text: data.payload.text, timestamp: new Date().toISOString() };
             this.messages.push(messagePayload);
             this.messages = this.messages.slice(-4);
